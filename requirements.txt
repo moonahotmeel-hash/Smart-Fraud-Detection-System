@@ -1,0 +1,9 @@
+tensorflow==2.18.0
+numpy
+pandas
+scikit-learn
+imbalanced-learn
+matplotlib
+seaborn
+gradio
+joblib
