@@ -292,7 +292,7 @@ with gr.Blocks(
 ) as demo:
 
     gr.Image(
-        "assets/university_logo.png",
+        "assets/logo.png",
         show_label=False,
         width=180
     )
