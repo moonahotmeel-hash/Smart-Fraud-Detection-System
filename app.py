@@ -61,8 +61,53 @@ def predict_fraud(
     newbalanceOrig,
     oldbalanceDest,
     newbalanceDest,
+    balanceDiffOrig,
+    balanceDiffDest,
+    errorBalanceOrig,
+    errorBalanceDest,
     isFlaggedFraud
 ):
+
+    type_map = {
+        "CASH_IN": 0,
+        "CASH_OUT": 1,
+        "DEBIT": 2,
+        "PAYMENT": 3,
+        "TRANSFER": 4
+    }
+
+    data = [[
+        step,
+        type_map[transaction_type],
+        amount,
+        oldbalanceOrg,
+        newbalanceOrig,
+        oldbalanceDest,
+        newbalanceDest,
+        balanceDiffOrig,
+        balanceDiffDest,
+        errorBalanceOrig,
+        errorBalanceDest,
+        isFlaggedFraud
+    ]]
+
+    data_scaled = scaler.transform(data)
+
+    data_scaled = data_scaled.reshape(
+        data_scaled.shape[0],
+        data_scaled.shape[1],
+        1
+    )
+
+    prob = float(model.predict(data_scaled, verbose=0)[0][0])
+
+    prediction = "🚨 Fraud" if prob > 0.5 else "✅ Legitimate"
+
+    return f"""
+Prediction: {prediction}
+
+Fraud Probability: {prob*100:.2f}%
+"""
 
     type_encoded = encoder.transform(
         [transaction_type]
