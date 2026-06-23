@@ -6,9 +6,9 @@ import tempfile
 
 from tensorflow.keras.models import load_model
 
-# =========================
+# ==================================
 # LOAD MODEL
-# =========================
+# ==================================
 
 model = load_model("models/fraud_detection_model.keras")
 
@@ -18,9 +18,9 @@ with open("models/scaler.pkl", "rb") as f:
 with open("models/label_encoder.pkl", "rb") as f:
     encoder = pickle.load(f)
 
-# =========================
+# ==================================
 # FEATURE ENGINEERING
-# =========================
+# ==================================
 
 def prepare_features(df):
 
@@ -48,10 +48,9 @@ def prepare_features(df):
 
     return df
 
-
-# =========================
-# SINGLE PREDICTION
-# =========================
+# ==================================
+# SINGLE TRANSACTION PREDICTION
+# ==================================
 
 def predict_fraud(
     step,
@@ -61,59 +60,14 @@ def predict_fraud(
     newbalanceOrig,
     oldbalanceDest,
     newbalanceDest,
-    balanceDiffOrig,
-    balanceDiffDest,
-    errorBalanceOrig,
-    errorBalanceDest,
     isFlaggedFraud
 ):
-
-    type_map = {
-        "CASH_IN": 0,
-        "CASH_OUT": 1,
-        "DEBIT": 2,
-        "PAYMENT": 3,
-        "TRANSFER": 4
-    }
-
-    data = [[
-        step,
-        type_map[transaction_type],
-        amount,
-        oldbalanceOrg,
-        newbalanceOrig,
-        oldbalanceDest,
-        newbalanceDest,
-        balanceDiffOrig,
-        balanceDiffDest,
-        errorBalanceOrig,
-        errorBalanceDest,
-        isFlaggedFraud
-    ]]
-
-    data_scaled = scaler.transform(data)
-
-    data_scaled = data_scaled.reshape(
-        data_scaled.shape[0],
-        data_scaled.shape[1],
-        1
-    )
-
-    prob = float(model.predict(data_scaled, verbose=0)[0][0])
-
-    prediction = "🚨 Fraud" if prob > 0.5 else "✅ Legitimate"
-
-    return f"""
-Prediction: {prediction}
-
-Fraud Probability: {prob*100:.2f}%
-"""
 
     type_encoded = encoder.transform(
         [transaction_type]
     )[0]
 
-    data = pd.DataFrame([{
+    df = pd.DataFrame([{
         "step": step,
         "type": type_encoded,
         "amount": amount,
@@ -124,24 +78,24 @@ Fraud Probability: {prob*100:.2f}%
         "isFlaggedFraud": isFlaggedFraud
     }])
 
-    data = prepare_features(data)
+    df = prepare_features(df)
 
     features = [
-        'step',
-        'type',
-        'amount',
-        'oldbalanceOrg',
-        'newbalanceOrig',
-        'oldbalanceDest',
-        'newbalanceDest',
-        'balanceDiffOrig',
-        'balanceDiffDest',
-        'errorBalanceOrig',
-        'errorBalanceDest',
-        'isFlaggedFraud'
+        "step",
+        "type",
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "balanceDiffOrig",
+        "balanceDiffDest",
+        "errorBalanceOrig",
+        "errorBalanceDest",
+        "isFlaggedFraud"
     ]
 
-    X = data[features]
+    X = df[features]
 
     X_scaled = scaler.transform(X)
 
@@ -151,41 +105,51 @@ Fraud Probability: {prob*100:.2f}%
         1
     )
 
-    prob = float(model.predict(X_scaled, verbose=0)[0][0])
+    prob = float(
+        model.predict(
+            X_scaled,
+            verbose=0
+        )[0][0]
+    )
 
-    prediction = "🚨 FRAUD" if prob > 0.5 else "✅ LEGITIMATE"
+    prediction = (
+        "🚨 FRAUD"
+        if prob > 0.5
+        else "✅ LEGITIMATE"
+    )
 
     return (
         prediction,
         f"{prob*100:.2f}%"
     )
 
-
-# =========================
-# BATCH CSV PREDICTION
-# =========================
+# ==================================
+# BATCH CSV ANALYSIS
+# ==================================
 
 def analyze_csv(file):
 
     df = pd.read_csv(file.name)
 
-    df["type"] = encoder.transform(df["type"])
+    df["type"] = encoder.transform(
+        df["type"]
+    )
 
     df = prepare_features(df)
 
     features = [
-        'step',
-        'type',
-        'amount',
-        'oldbalanceOrg',
-        'newbalanceOrig',
-        'oldbalanceDest',
-        'newbalanceDest',
-        'balanceDiffOrig',
-        'balanceDiffDest',
-        'errorBalanceOrig',
-        'errorBalanceDest',
-        'isFlaggedFraud'
+        "step",
+        "type",
+        "amount",
+        "oldbalanceOrg",
+        "newbalanceOrig",
+        "oldbalanceDest",
+        "newbalanceDest",
+        "balanceDiffOrig",
+        "balanceDiffDest",
+        "errorBalanceOrig",
+        "errorBalanceDest",
+        "isFlaggedFraud"
     ]
 
     X = df[features]
@@ -202,6 +166,8 @@ def analyze_csv(file):
         X_scaled,
         verbose=0
     )
+
+    probs = probs.flatten()
 
     df["Fraud_Probability"] = probs
 
@@ -222,11 +188,9 @@ def analyze_csv(file):
     )
 
     return output_file.name
-
-
-# =========================
-# UI
-# =========================
+    # ==================================
+# USER INTERFACE
+# ==================================
 
 with gr.Blocks() as demo:
 
@@ -234,9 +198,18 @@ with gr.Blocks() as demo:
         "# Smart Fraud Detection System"
     )
 
-    with gr.Tab("Single Transaction Detection"):
+    # ==========================
+    # SINGLE TRANSACTION
+    # ==========================
 
-        step = gr.Number(label="Step")
+    with gr.Tab(
+        "Single Transaction Detection"
+    ):
+
+        step = gr.Number(
+            label="Step",
+            value=0
+        )
 
         transaction_type = gr.Dropdown(
             choices=[
@@ -246,25 +219,33 @@ with gr.Blocks() as demo:
                 "PAYMENT",
                 "TRANSFER"
             ],
+            value="CASH_IN",
             label="Transaction Type"
         )
 
-        amount = gr.Number(label="Amount")
+        amount = gr.Number(
+            label="Amount",
+            value=0
+        )
 
         oldbalanceOrg = gr.Number(
-            label="Old Balance Origin"
+            label="Old Balance Origin",
+            value=0
         )
 
         newbalanceOrig = gr.Number(
-            label="New Balance Origin"
+            label="New Balance Origin",
+            value=0
         )
 
         oldbalanceDest = gr.Number(
-            label="Old Balance Destination"
+            label="Old Balance Destination",
+            value=0
         )
 
         newbalanceDest = gr.Number(
-            label="New Balance Destination"
+            label="New Balance Destination",
+            value=0
         )
 
         isFlaggedFraud = gr.Number(
@@ -281,7 +262,7 @@ with gr.Blocks() as demo:
         )
 
         confidence_output = gr.Textbox(
-            label="Confidence"
+            label="Fraud Probability"
         )
 
         predict_btn.click(
@@ -302,10 +283,16 @@ with gr.Blocks() as demo:
             ]
         )
 
-    with gr.Tab("Batch CSV Detection"):
+    # ==========================
+    # BATCH CSV
+    # ==========================
+
+    with gr.Tab(
+        "Batch CSV Detection"
+    ):
 
         csv_file = gr.File(
-            label="Upload CSV"
+            label="Upload CSV Dataset"
         )
 
         analyze_btn = gr.Button(
@@ -323,5 +310,6 @@ with gr.Blocks() as demo:
         )
 
 demo.launch(
-    server_name="0.0.0.0"
+    server_name="0.0.0.0",
+    server_port=7860
 )
