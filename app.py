@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 
 from tensorflow.keras.models import load_model
 
-# ==================================
+# =====================================
 # LOAD MODEL
-# ==================================
+# =====================================
 
 model = load_model("models/fraud_detection_model.keras")
 
@@ -19,9 +19,9 @@ with open("models/scaler.pkl", "rb") as f:
 with open("models/label_encoder.pkl", "rb") as f:
     encoder = pickle.load(f)
 
-# ==================================
+# =====================================
 # FEATURE ENGINEERING
-# ==================================
+# =====================================
 
 def prepare_features(df):
 
@@ -49,9 +49,9 @@ def prepare_features(df):
 
     return df
 
-# ==================================
+# =====================================
 # SINGLE PREDICTION
-# ==================================
+# =====================================
 
 def predict_fraud(
     step,
@@ -121,20 +121,17 @@ def predict_fraud(
 
     return (
         prediction,
-        f"{prob*100:.2f}%"
+        f"{prob * 100:.2f}%"
     )
-
-# ==================================
-# CSV ANALYSIS
-# ==================================
+    # =====================================
+# BATCH CSV ANALYSIS
+# =====================================
 
 def analyze_csv(file):
 
     df = pd.read_csv(file.name)
 
-    df["type"] = encoder.transform(
-        df["type"]
-    )
+    df["type"] = encoder.transform(df["type"])
 
     df = prepare_features(df)
 
@@ -166,7 +163,9 @@ def analyze_csv(file):
     probs = model.predict(
         X_scaled,
         verbose=0
-    ).flatten()
+    )
+
+    probs = probs.flatten()
 
     df["Fraud_Probability"] = probs
 
@@ -176,59 +175,46 @@ def analyze_csv(file):
         "Legitimate"
     )
 
-    fraud_count = int(
-        (df["Prediction"] == "Fraud").sum()
-    )
+    fraud_count = (df["Prediction"] == "Fraud").sum()
+    legit_count = (df["Prediction"] == "Legitimate").sum()
 
-    legit_count = int(
-        (df["Prediction"] == "Legitimate").sum()
-    )
+    fig, ax = plt.subplots(figsize=(6, 6))
 
-    fraud_rate = round(
-        fraud_count / len(df) * 100,
-        2
-    )
-
-    summary = f"""
-Total Transactions: {len(df)}
-
-Fraud Transactions: {fraud_count}
-
-Legitimate Transactions: {legit_count}
-
-Fraud Rate: {fraud_rate}%
-"""
-
-    plt.figure(figsize=(5,5))
-
-    plt.pie(
+    ax.pie(
         [fraud_count, legit_count],
-        labels=["Fraud","Legitimate"],
+        labels=["Fraud", "Legitimate"],
         autopct="%1.1f%%"
     )
 
-    chart_path = "fraud_chart.png"
+    ax.set_title("Fraud Detection Dashboard")
 
-    plt.savefig(chart_path)
-
-    plt.close()
-
-    output_file = "analysis_results.csv"
+    output_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".csv"
+    )
 
     df.to_csv(
-        output_file,
+        output_file.name,
         index=False
     )
 
+    summary = f"""
+Total Transactions : {len(df)}
+
+Fraud Transactions : {fraud_count}
+
+Legitimate Transactions : {legit_count}
+"""
+
     return (
-        summary,
-        chart_path,
-        output_file
+        output_file.name,
+        fig,
+        summary
     )
 
-# ==================================
-# UI
-# ==================================
+# =====================================
+# USER INTERFACE
+# =====================================
 
 with gr.Blocks() as demo:
 
@@ -236,13 +222,7 @@ with gr.Blocks() as demo:
         "# Smart Fraud Detection System"
     )
 
-    # ==================================
-    # SINGLE TRANSACTION
-    # ==================================
-
-    with gr.Tab(
-        "Single Transaction Detection"
-    ):
+    with gr.Tab("Single Transaction Detection"):
 
         step = gr.Number(
             label="Step",
@@ -286,9 +266,10 @@ with gr.Blocks() as demo:
             value=0
         )
 
-        isFlaggedFraud = gr.Number(
-            label="Flagged Fraud (0 or 1)",
-            value=0
+        isFlaggedFraud = gr.Dropdown(
+            choices=[0, 1],
+            value=0,
+            label="Flagged Fraud (0 or 1)"
         )
 
         predict_btn = gr.Button(
@@ -321,46 +302,44 @@ with gr.Blocks() as demo:
             ]
         )
 
-    # ==================================
-    # CSV ANALYSIS
-    # ==================================
-
-    with gr.Tab(
-        "Batch CSV Detection"
-    ):
+    with gr.Tab("Batch CSV Detection"):
 
         csv_file = gr.File(
-            label="Upload CSV Dataset"
+            label="Upload CSV File"
         )
 
         analyze_btn = gr.Button(
             "Analyze Dataset"
         )
 
-        summary_output = gr.Textbox(
-            label="Dashboard Summary",
-            lines=8
-        )
-
-        chart_output = gr.Image(
-            label="Fraud Statistics"
-        )
-
         result_file = gr.File(
-            label="Download Results"
+            label="Download Result CSV"
+        )
+
+        dashboard_plot = gr.Plot(
+            label="Pie Chart"
+        )
+
+        summary_text = gr.Textbox(
+            label="Dashboard Summary"
         )
 
         analyze_btn.click(
             fn=analyze_csv,
             inputs=csv_file,
             outputs=[
-                summary_output,
-                chart_output,
-                result_file
+                result_file,
+                dashboard_plot,
+                summary_text
             ]
         )
 
-demo.launch(
-    server_name="0.0.0.0",
-    server_port=7860
-)
+# =====================================
+# LAUNCH
+# =====================================
+
+if __name__ == "__main__":
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=7860
+    )
