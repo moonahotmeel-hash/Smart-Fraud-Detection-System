@@ -20,6 +20,41 @@ with open("models/label_encoder.pkl", "rb") as f:
     encoder = pickle.load(f)
 
 # =====================================
+# PROJECT INFORMATION
+# =====================================
+
+PROJECT_INFO = """
+UNIVERSITY OF GEDAREF
+
+Faculty of Computer Science and Information Technology
+
+Department of Information Systems
+
+Batch 12
+
+Project Title:
+A Hybrid System Based on Deep Learning to Detect Financial Fraud by Using CNN-RNN (LSTM)
+
+Supervisor:
+Mrs. Hind Ali
+
+Prepared By:
+
+Ahmed Salah Eldin Abdelrazig
+
+Abu Obeida Hamid
+
+Amjad Ahmed
+
+Ehab Alhaj
+
+Mathani Adel
+
+Version 1.0
+Year 2026
+"""
+
+# =====================================
 # FEATURE ENGINEERING
 # =====================================
 
@@ -123,7 +158,31 @@ def predict_fraud(
         prediction,
         f"{prob * 100:.2f}%"
     )
-    # =====================================
+
+# =====================================
+# CLEAR FORM
+# =====================================
+
+def clear_form():
+    return (
+        0,
+        "CASH_IN",
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    )
+
+# =====================================
+# ABOUT PROJECT
+# =====================================
+
+def about_project():
+    return PROJECT_INFO
+
+# =====================================
 # BATCH CSV ANALYSIS
 # =====================================
 
@@ -131,7 +190,9 @@ def analyze_csv(file):
 
     df = pd.read_csv(file.name)
 
-    df["type"] = encoder.transform(df["type"])
+    df["type"] = encoder.transform(
+        df["type"]
+    )
 
     df = prepare_features(df)
 
@@ -163,9 +224,7 @@ def analyze_csv(file):
     probs = model.predict(
         X_scaled,
         verbose=0
-    )
-
-    probs = probs.flatten()
+    ).flatten()
 
     df["Fraud_Probability"] = probs
 
@@ -175,10 +234,20 @@ def analyze_csv(file):
         "Legitimate"
     )
 
-    fraud_count = (df["Prediction"] == "Fraud").sum()
-    legit_count = (df["Prediction"] == "Legitimate").sum()
+    fraud_count = int(
+        (df["Prediction"] == "Fraud").sum()
+    )
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    legit_count = int(
+        (df["Prediction"] == "Legitimate").sum()
+    )
+
+    fraud_rate = round(
+        fraud_count / len(df) * 100,
+        2
+    )
+
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     ax.pie(
         [fraud_count, legit_count],
@@ -187,6 +256,16 @@ def analyze_csv(file):
     )
 
     ax.set_title("Fraud Detection Dashboard")
+
+    summary = f"""
+Total Transactions : {len(df)}
+
+Fraud Transactions : {fraud_count}
+
+Legitimate Transactions : {legit_count}
+
+Fraud Rate : {fraud_rate}%
+"""
 
     output_file = tempfile.NamedTemporaryFile(
         delete=False,
@@ -198,14 +277,6 @@ def analyze_csv(file):
         index=False
     )
 
-    summary = f"""
-Total Transactions : {len(df)}
-
-Fraud Transactions : {fraud_count}
-
-Legitimate Transactions : {legit_count}
-"""
-
     return (
         output_file.name,
         fig,
@@ -216,11 +287,29 @@ Legitimate Transactions : {legit_count}
 # USER INTERFACE
 # =====================================
 
-with gr.Blocks() as demo:
+with gr.Blocks(
+    title="Smart Fraud Detection System"
+) as demo:
 
-    gr.Markdown(
-        "# Smart Fraud Detection System"
+    gr.Image(
+        "assets/university_logo.png",
+        show_label=False,
+        width=180
     )
+
+    gr.Markdown("""
+# UNIVERSITY OF GEDAREF
+
+### Faculty of Computer Science and Information Technology
+
+### Department of Information Systems
+
+### A Hybrid System Based on Deep Learning to Detect Financial Fraud by Using CNN-RNN (LSTM)
+""")
+
+    # =================================
+    # SINGLE TRANSACTION
+    # =================================
 
     with gr.Tab("Single Transaction Detection"):
 
@@ -269,12 +358,22 @@ with gr.Blocks() as demo:
         isFlaggedFraud = gr.Dropdown(
             choices=[0, 1],
             value=0,
-            label="Flagged Fraud (0 or 1)"
+            label="Flagged Fraud"
         )
 
-        predict_btn = gr.Button(
-            "Predict Fraud"
-        )
+        with gr.Row():
+
+            predict_btn = gr.Button(
+                "Predict Fraud"
+            )
+
+            clear_btn = gr.Button(
+                "Clear Form"
+            )
+
+            about_btn = gr.Button(
+                "About Project"
+            )
 
         prediction_output = gr.Textbox(
             label="Prediction"
@@ -282,6 +381,11 @@ with gr.Blocks() as demo:
 
         confidence_output = gr.Textbox(
             label="Fraud Probability"
+        )
+
+        about_output = gr.Textbox(
+            label="Project Information",
+            lines=20
         )
 
         predict_btn.click(
@@ -302,6 +406,29 @@ with gr.Blocks() as demo:
             ]
         )
 
+        clear_btn.click(
+            fn=clear_form,
+            outputs=[
+                step,
+                transaction_type,
+                amount,
+                oldbalanceOrg,
+                newbalanceOrig,
+                oldbalanceDest,
+                newbalanceDest,
+                isFlaggedFraud
+            ]
+        )
+
+        about_btn.click(
+            fn=about_project,
+            outputs=about_output
+        )
+
+    # =================================
+    # CSV ANALYSIS
+    # =================================
+
     with gr.Tab("Batch CSV Detection"):
 
         csv_file = gr.File(
@@ -321,7 +448,8 @@ with gr.Blocks() as demo:
         )
 
         summary_text = gr.Textbox(
-            label="Dashboard Summary"
+            label="Dashboard Summary",
+            lines=8
         )
 
         analyze_btn.click(
@@ -333,6 +461,15 @@ with gr.Blocks() as demo:
                 summary_text
             ]
         )
+
+    gr.Markdown("""
+---
+© 2026 University of Gedaref
+
+Faculty of Computer Science and Information Technology
+
+Department of Information Systems
+""")
 
 # =====================================
 # LAUNCH
