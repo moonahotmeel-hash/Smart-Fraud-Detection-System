@@ -300,10 +300,6 @@ with gr.Blocks(
     gr.Markdown("""
 # UNIVERSITY OF GEDAREF
 
-### Faculty of Computer Science and Information Technology
-
-### Department of Information Systems
-
 ### A Hybrid System Based on Deep Learning to Detect Financial Fraud by Using CNN-RNN (LSTM)
 """)
 
