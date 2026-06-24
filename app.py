@@ -4,59 +4,47 @@ import numpy as np
 import pickle
 import tempfile
 import matplotlib.pyplot as plt
-
+from datetime import datetime
 from tensorflow.keras.models import load_model
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Image
+)
+from reportlab.lib.styles import getSampleStyleSheet
 
-# =====================================
+# ==========================================
 # LOAD MODEL
-# =====================================
+# ==========================================
 
-model = load_model("models/fraud_detection_model.keras")
+model = load_model(
+    "models/fraud_detection_model.keras"
+)
 
-with open("models/scaler.pkl", "rb") as f:
+with open(
+    "models/scaler.pkl",
+    "rb"
+) as f:
     scaler = pickle.load(f)
 
-with open("models/label_encoder.pkl", "rb") as f:
+with open(
+    "models/label_encoder.pkl",
+    "rb"
+) as f:
     encoder = pickle.load(f)
 
-# =====================================
-# PROJECT INFORMATION
-# =====================================
+# ==========================================
+# GLOBAL DASHBOARD
+# ==========================================
 
-PROJECT_INFO = """
-UNIVERSITY OF GEDAREF
+total_transactions = 0
+fraud_transactions = 0
+legitimate_transactions = 0
 
-Faculty of Computer Science and Information Technology
-
-Department of Information Systems
-
-Batch 12
-
-Project Title:
-A Hybrid System Based on Deep Learning to Detect Financial Fraud by Using CNN-RNN (LSTM)
-
-Supervisor:
-Mrs. Hind Ali
-
-Prepared By:
-
-Ahmed Salah Eldin Abdelrazig
-
-Abu Obeida Hamid
-
-Amjad Ahmed
-
-Ehab Alhaj
-
-Mathani Adel
-
-Version 1.0
-Year 2026
-"""
-
-# =====================================
+# ==========================================
 # FEATURE ENGINEERING
-# =====================================
+# ==========================================
 
 def prepare_features(df):
 
@@ -84,9 +72,139 @@ def prepare_features(df):
 
     return df
 
-# =====================================
+# ==========================================
+# CREATE DASHBOARD CHART
+# ==========================================
+
+def create_dashboard_chart():
+
+    labels = [
+        "Legitimate",
+        "Fraud"
+    ]
+
+    values = [
+        legitimate_transactions,
+        fraud_transactions
+    ]
+
+    plt.figure(figsize=(6,6))
+
+    plt.pie(
+        values,
+        labels=labels,
+        autopct="%1.1f%%"
+    )
+
+    plt.title(
+        "Fraud Detection Statistics"
+    )
+
+    chart_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".png"
+    )
+
+    plt.savefig(
+        chart_file.name,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
+    return chart_file.name
+
+# ==========================================
+# GENERATE PDF REPORT
+# ==========================================
+
+def generate_pdf_report(
+    result_text,
+    confidence_text
+):
+
+    pdf_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".pdf"
+    )
+
+    doc = SimpleDocTemplate(
+        pdf_file.name
+    )
+
+    styles = getSampleStyleSheet()
+
+    content = []
+
+    try:
+
+        content.append(
+            Image(
+                "assets/university_logo.png",
+                width=120,
+                height=120
+            )
+        )
+
+    except:
+        pass
+
+    content.append(
+        Paragraph(
+            "University of Gedaref",
+            styles["Title"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            "Faculty of Computer Science and Information Technology",
+            styles["Heading2"]
+        )
+    )
+
+    content.append(
+        Spacer(1,12)
+    )
+
+    content.append(
+        Paragraph(
+            "A Hybrid System Based on Deep Learning to Detect Financial Fraud by CNN-RNN (LSTM)",
+            styles["Heading3"]
+        )
+    )
+
+    content.append(
+        Spacer(1,12)
+    )
+
+    content.append(
+        Paragraph(
+            f"Result: {result_text}",
+            styles["BodyText"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Confidence: {confidence_text}",
+            styles["BodyText"]
+        )
+    )
+
+    content.append(
+        Paragraph(
+            f"Generated: {datetime.now()}",
+            styles["BodyText"]
+        )
+    )
+
+    doc.build(content)
+
+    return pdf_file.name
+    # ==========================================
 # SINGLE PREDICTION
-# =====================================
+# ==========================================
 
 def predict_fraud(
     step,
@@ -99,11 +217,15 @@ def predict_fraud(
     isFlaggedFraud
 ):
 
+    global total_transactions
+    global fraud_transactions
+    global legitimate_transactions
+
     type_encoded = encoder.transform(
         [transaction_type]
     )[0]
 
-    df = pd.DataFrame([{
+    data = pd.DataFrame([{
         "step": step,
         "type": type_encoded,
         "amount": amount,
@@ -114,7 +236,7 @@ def predict_fraud(
         "isFlaggedFraud": isFlaggedFraud
     }])
 
-    df = prepare_features(df)
+    data = prepare_features(data)
 
     features = [
         "step",
@@ -131,7 +253,7 @@ def predict_fraud(
         "isFlaggedFraud"
     ]
 
-    X = df[features]
+    X = data[features]
 
     X_scaled = scaler.transform(X)
 
@@ -141,29 +263,75 @@ def predict_fraud(
         1
     )
 
-    prob = float(
+    probability = float(
         model.predict(
             X_scaled,
             verbose=0
         )[0][0]
     )
 
-    prediction = (
-        "🚨 FRAUD"
-        if prob > 0.5
-        else "✅ LEGITIMATE"
+    total_transactions += 1
+
+    if probability > 0.5:
+
+        fraud_transactions += 1
+
+        result = "🔴 FRAUD TRANSACTION"
+
+        message = (
+            f"{result}\n\n"
+            f"Confidence: {probability*100:.2f}%\n\n"
+            f"Suspicious transaction detected."
+        )
+
+    else:
+
+        legitimate_transactions += 1
+
+        result = "🟢 LEGITIMATE TRANSACTION"
+
+        message = (
+            f"{result}\n\n"
+            f"Confidence: {(1-probability)*100:.2f}%\n\n"
+            f"Transaction appears normal."
+        )
+
+    fraud_rate = (
+        fraud_transactions /
+        total_transactions
+    ) * 100
+
+    dashboard = f"""
+📊 DASHBOARD
+
+Total Transactions: {total_transactions}
+
+✅ Legitimate Transactions: {legitimate_transactions}
+
+🚨 Fraud Transactions: {fraud_transactions}
+
+📈 Fraud Rate: {fraud_rate:.2f}%
+"""
+
+    chart = create_dashboard_chart()
+
+    confidence_text = (
+        f"{probability*100:.2f}%"
     )
 
     return (
-        prediction,
-        f"{prob * 100:.2f}%"
+        message,
+        confidence_text,
+        dashboard,
+        chart
     )
 
-# =====================================
+# ==========================================
 # CLEAR FORM
-# =====================================
+# ==========================================
 
 def clear_form():
+
     return (
         0,
         "CASH_IN",
@@ -172,23 +340,57 @@ def clear_form():
         0,
         0,
         0,
-        0
+        0,
+        "",
+        "",
+        "",
+        None
     )
 
-# =====================================
-# ABOUT PROJECT
-# =====================================
+# ==========================================
+# ABOUT SYSTEM
+# ==========================================
 
-def about_project():
-    return PROJECT_INFO
+def about_system():
 
-# =====================================
-# BATCH CSV ANALYSIS
-# =====================================
+    return """
+University of Gedaref
+
+Faculty of Computer Science and Information Technology
+
+Project:
+
+A Hybrid System Based on Deep Learning to Detect Financial Fraud by CNN-RNN (LSTM)
+
+Supervisor:
+Hind Ali
+
+Prepared By:
+
+Ahmed Salah Eldin Abd Alrazig
+
+Abo Ubaida Hamid
+
+Amjad Ahmed
+
+Ehab Alhaj
+
+Mathani Adel
+
+Batch 12
+
+Information Systems Department
+"""
+
+# ==========================================
+# CSV ANALYSIS
+# ==========================================
 
 def analyze_csv(file):
 
-    df = pd.read_csv(file.name)
+    df = pd.read_csv(
+        file.name
+    )
 
     df["type"] = encoder.transform(
         df["type"]
@@ -224,7 +426,7 @@ def analyze_csv(file):
     probs = model.predict(
         X_scaled,
         verbose=0
-    ).flatten()
+    )
 
     df["Fraud_Probability"] = probs
 
@@ -233,39 +435,6 @@ def analyze_csv(file):
         "Fraud",
         "Legitimate"
     )
-
-    fraud_count = int(
-        (df["Prediction"] == "Fraud").sum()
-    )
-
-    legit_count = int(
-        (df["Prediction"] == "Legitimate").sum()
-    )
-
-    fraud_rate = round(
-        fraud_count / len(df) * 100,
-        2
-    )
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-
-    ax.pie(
-        [fraud_count, legit_count],
-        labels=["Fraud", "Legitimate"],
-        autopct="%1.1f%%"
-    )
-
-    ax.set_title("Fraud Detection Dashboard")
-
-    summary = f"""
-Total Transactions : {len(df)}
-
-Fraud Transactions : {fraud_count}
-
-Legitimate Transactions : {legit_count}
-
-Fraud Rate : {fraud_rate}%
-"""
 
     output_file = tempfile.NamedTemporaryFile(
         delete=False,
@@ -277,35 +446,32 @@ Fraud Rate : {fraud_rate}%
         index=False
     )
 
-    return (
-        output_file.name,
-        fig,
-        summary
-    )
-
-# =====================================
+    return output_file.name
+    # ==========================================
 # USER INTERFACE
-# =====================================
+# ==========================================
 
 with gr.Blocks(
-    title="Smart Fraud Detection System"
+    theme=gr.themes.Soft()
 ) as demo:
 
-    gr.Image(
-        "assets/logo.png",
-        show_label=False,
-        width=180
-    )
+    try:
+        gr.Image(
+            "assets/university_logo.png",
+            show_label=False,
+            height=180
+        )
+    except:
+        pass
 
     gr.Markdown("""
-# UNIVERSITY OF GEDAREF
+# Smart Fraud Detection System
 
-### A Hybrid System Based on Deep Learning to Detect Financial Fraud by Using CNN-RNN (LSTM)
+### A Hybrid System Based on Deep Learning to Detect Financial Fraud by CNN-RNN (LSTM)
+
+**University of Gedaref**  
+**Faculty of Computer Science and Information Technology**
 """)
-
-    # =================================
-    # SINGLE TRANSACTION
-    # =================================
 
     with gr.Tab("Single Transaction Detection"):
 
@@ -352,36 +518,55 @@ with gr.Blocks(
         )
 
         isFlaggedFraud = gr.Dropdown(
-            choices=[0, 1],
+            choices=[0,1],
             value=0,
-            label="Flagged Fraud"
+            label="Flagged Fraud (0 or 1)"
         )
 
         with gr.Row():
 
             predict_btn = gr.Button(
-                "Predict Fraud"
+                "🔍 Predict Fraud",
+                variant="primary"
             )
 
             clear_btn = gr.Button(
-                "Clear Form"
+                "🧹 Clear Form"
+            )
+
+            print_btn = gr.Button(
+                "🖨 Print Report"
             )
 
             about_btn = gr.Button(
-                "About Project"
+                "ℹ About System"
             )
 
         prediction_output = gr.Textbox(
-            label="Prediction"
+            label="Prediction",
+            lines=5
         )
 
         confidence_output = gr.Textbox(
             label="Fraud Probability"
         )
 
+        dashboard_output = gr.Textbox(
+            label="Dashboard Statistics",
+            lines=10
+        )
+
+        chart_output = gr.Image(
+            label="Fraud Analytics"
+        )
+
         about_output = gr.Textbox(
-            label="Project Information",
-            lines=20
+            label="About",
+            lines=15
+        )
+
+        pdf_output = gr.File(
+            label="Download Report"
         )
 
         predict_btn.click(
@@ -398,7 +583,9 @@ with gr.Blocks(
             ],
             outputs=[
                 prediction_output,
-                confidence_output
+                confidence_output,
+                dashboard_output,
+                chart_output
             ]
         )
 
@@ -412,67 +599,54 @@ with gr.Blocks(
                 newbalanceOrig,
                 oldbalanceDest,
                 newbalanceDest,
-                isFlaggedFraud
+                isFlaggedFraud,
+                prediction_output,
+                confidence_output,
+                dashboard_output,
+                chart_output
             ]
         )
 
         about_btn.click(
-            fn=about_project,
+            fn=about_system,
             outputs=about_output
         )
 
-    # =================================
-    # CSV ANALYSIS
-    # =================================
+        print_btn.click(
+            fn=generate_pdf_report,
+            inputs=[
+                prediction_output,
+                confidence_output
+            ],
+            outputs=pdf_output
+        )
 
     with gr.Tab("Batch CSV Detection"):
 
         csv_file = gr.File(
-            label="Upload CSV File"
+            label="Upload CSV Dataset"
         )
 
         analyze_btn = gr.Button(
-            "Analyze Dataset"
+            "Analyze Dataset",
+            variant="primary"
         )
 
         result_file = gr.File(
             label="Download Result CSV"
         )
 
-        dashboard_plot = gr.Plot(
-            label="Pie Chart"
-        )
-
-        summary_text = gr.Textbox(
-            label="Dashboard Summary",
-            lines=8
-        )
-
         analyze_btn.click(
             fn=analyze_csv,
             inputs=csv_file,
-            outputs=[
-                result_file,
-                dashboard_plot,
-                summary_text
-            ]
+            outputs=result_file
         )
 
-    gr.Markdown("""
----
-© 2026 University of Gedaref
+# ==========================================
+# START APP
+# ==========================================
 
-Faculty of Computer Science and Information Technology
-
-Department of Information Systems
-""")
-
-# =====================================
-# LAUNCH
-# =====================================
-
-if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860
-    )
+demo.launch(
+    server_name="0.0.0.0",
+    server_port=7860
+)
