@@ -140,7 +140,7 @@ def generate_pdf_report(
 
         content.append(
             Image(
-                "assets/university_logo.png",
+                "assets/logo.png",
                 width=120,
                 height=120
             )
@@ -470,7 +470,7 @@ with gr.Blocks(
 ### A Hybrid System Based on Deep Learning to Detect Financial Fraud by CNN-RNN (LSTM)
 
 **University of Gedaref**  
-**Faculty of Computer Science and Information Technology**
+
 """)
 
     with gr.Tab("Single Transaction Detection"):
